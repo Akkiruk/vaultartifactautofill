@@ -2,7 +2,7 @@
 
 Client-side Forge mod for Vault Hunters 1.18.2 that batch-places artifacts into artifact projector walls.
 
-Download `vaultartifactautofill-1.0.6.jar` from Releases.
+Download `vaultartifactautofill-1.0.7.jar` from Releases.
 
 ## Behavior
 - Right-click any incomplete artifact projector
@@ -24,7 +24,7 @@ Download `vaultartifactautofill-1.0.6.jar` from Releases.
 .\gradlew.bat build
 ```
 
-Output: `build/libs/vaultartifactautofill-1.0.6.jar`
+Output: `build/libs/vaultartifactautofill-1.0.7.jar`
 
 ## Release
 ```powershell
