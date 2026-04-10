@@ -23,6 +23,11 @@ function Invoke-Git {
 function Get-GitHubRepoSlug {
     param([string]$RemoteName = 'origin')
 
+    $remoteNames = @(& git remote 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not ($remoteNames -contains $RemoteName)) {
+        return $null
+    }
+
     $remoteUrl = (git remote get-url $RemoteName 2>$null)
     if ($LASTEXITCODE -ne 0 -or -not $remoteUrl) {
         return $null
