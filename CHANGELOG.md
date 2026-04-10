@@ -4,7 +4,8 @@ All notable changes to Vault Artifact Autofill are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Added action-bar feedback when autofill finds no eligible artifacts, including clearer messaging for fragments and unidentified artifacts.
+- Added runtime log messages for autofill startup and projector click decisions so latest.log is useful for debugging.
 
 ## [1.0.4] - 2026-04-09
 

@@ -6,9 +6,10 @@ Download `vaultartifactautofill-1.0.4.jar` from Releases.
 
 ## Behavior
 - Right-click your own incomplete artifact projector
-- The mod scans your inventory for Vault artifacts
+- The mod scans your inventory for full identified Vault artifacts
 - Matching artifacts are moved into your selected hotbar slot temporarily and placed using normal vanilla interactions
 - If the final placement completes the full 5x5 wall, the mod automatically triggers the projector's completion click
+- If nothing can be placed, the mod shows an action-bar message explaining whether you have no identified artifacts, only fragments/unidentified artifacts, or no matching open slots
 - The server still decides ownership, slot mapping, and whether placement is valid
 
 ## Target Stack

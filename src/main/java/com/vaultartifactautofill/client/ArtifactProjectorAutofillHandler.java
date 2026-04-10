@@ -10,6 +10,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.ClickType;
@@ -26,12 +27,14 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 @Mod.EventBusSubscriber(modid = VaultArtifactAutofillMod.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ArtifactProjectorAutofillHandler {
@@ -73,16 +76,33 @@ public final class ArtifactProjectorAutofillHandler {
         }
 
         UUID owner = projector.getOwner();
-        if (owner == null || !owner.equals(player.getUUID()) || projector.consuming || projector.completed) {
+        if (owner == null || !owner.equals(player.getUUID())) {
+            showStatus(player, "This only works on your own artifact projector.");
+            VaultArtifactAutofillMod.LOGGER.info("Autofill skipped at {} because projector owner {} does not match player {}.", projectorPos, owner, player.getUUID());
+            return;
+        }
+        if (projector.consuming) {
+            showStatus(player, "Artifact projector is already completing.");
+            VaultArtifactAutofillMod.LOGGER.info("Autofill skipped at {} because the projector is already consuming artifacts.", projectorPos);
+            return;
+        }
+        if (projector.completed) {
+            showStatus(player, "Artifact projector is already complete.");
+            VaultArtifactAutofillMod.LOGGER.info("Autofill skipped at {} because the projector is already complete.", projectorPos);
             return;
         }
 
         PendingAutofill plan = PendingAutofill.create(player, projectorPos, projectorState, event.getFace());
         if (plan == null) {
+            String reason = describeNoEligibleArtifacts(player);
+            showStatus(player, reason);
+            VaultArtifactAutofillMod.LOGGER.info("Autofill found nothing to place at {}: {}", projectorPos, reason);
             return;
         }
 
         pending = plan;
+        showStatus(player, "Placing " + plan.getArtifactCount() + " identified artifact" + (plan.getArtifactCount() == 1 ? "" : "s") + ".");
+        VaultArtifactAutofillMod.LOGGER.info("Autofill queued {} artifact(s) for projector at {}.", plan.getArtifactCount(), projectorPos);
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
     }
@@ -125,6 +145,38 @@ public final class ArtifactProjectorAutofillHandler {
 
     private static boolean canReplace(BlockState state) {
         return state.isAir() || state.getMaterial().isReplaceable();
+    }
+
+    private static boolean isVaultItemPath(ItemStack stack, String path) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        var itemKey = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        return itemKey != null && "the_vault".equals(itemKey.getNamespace()) && path.equals(itemKey.getPath());
+    }
+
+    private static boolean hasInventoryMatch(LocalPlayer player, Predicate<ItemStack> predicate) {
+        for (int inventorySlot = 0; inventorySlot < player.getInventory().getContainerSize(); inventorySlot++) {
+            if (predicate.test(player.getInventory().getItem(inventorySlot))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String describeNoEligibleArtifacts(LocalPlayer player) {
+        if (hasInventoryMatch(player, ArtifactProjectorAutofillHandler::isArtifactStack)) {
+            return "No matching open slots were found for your identified artifacts.";
+        }
+        if (hasInventoryMatch(player, stack -> isVaultItemPath(stack, "artifact_fragment"))
+                || hasInventoryMatch(player, stack -> isVaultItemPath(stack, "unidentified_artifact"))) {
+            return "Only full identified artifacts can be placed into the projector.";
+        }
+        return "No identified artifacts were found in your inventory.";
+    }
+
+    private static void showStatus(LocalPlayer player, String message) {
+        player.displayClientMessage(Component.literal(message), true);
     }
 
     private static boolean hasCompleteArtifactSet(Level level, BlockPos projectorPos, BlockState projectorState) {
@@ -375,6 +427,10 @@ public final class ArtifactProjectorAutofillHandler {
 
         private boolean isFinished() {
             return this.finished;
+        }
+
+        private int getArtifactCount() {
+            return this.sourceInventorySlots.size();
         }
     }
 
