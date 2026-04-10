@@ -38,8 +38,8 @@ import java.util.function.Predicate;
 
 @Mod.EventBusSubscriber(modid = VaultArtifactAutofillMod.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ArtifactProjectorAutofillHandler {
-    private static PendingAutofill pending;
     private static final int ARTIFACT_COUNT = 25;
+    private static PendingAutofill pending;
 
     private ArtifactProjectorAutofillHandler() {
     }
@@ -75,12 +75,6 @@ public final class ArtifactProjectorAutofillHandler {
             return;
         }
 
-        UUID owner = projector.getOwner();
-        if (owner == null || !owner.equals(player.getUUID())) {
-            showStatus(player, "This only works on your own artifact projector.");
-            VaultArtifactAutofillMod.LOGGER.info("Autofill skipped at {} because projector owner {} does not match player {}.", projectorPos, owner, player.getUUID());
-            return;
-        }
         if (projector.consuming) {
             showStatus(player, "Artifact projector is already completing.");
             VaultArtifactAutofillMod.LOGGER.info("Autofill skipped at {} because the projector is already consuming artifacts.", projectorPos);
@@ -92,7 +86,9 @@ public final class ArtifactProjectorAutofillHandler {
             return;
         }
 
-        PendingAutofill plan = PendingAutofill.create(player, projectorPos, projectorState, event.getFace());
+        UUID owner = projector.getOwner();
+        boolean canAutoComplete = owner != null && owner.equals(player.getUUID());
+        PendingAutofill plan = PendingAutofill.create(player, projectorPos, projectorState, event.getFace(), canAutoComplete);
         if (plan == null) {
             String reason = describeNoEligibleArtifacts(player);
             showStatus(player, reason);
@@ -102,7 +98,7 @@ public final class ArtifactProjectorAutofillHandler {
 
         pending = plan;
         showStatus(player, "Placing " + plan.getArtifactCount() + " identified artifact" + (plan.getArtifactCount() == 1 ? "" : "s") + ".");
-        VaultArtifactAutofillMod.LOGGER.info("Autofill queued {} artifact(s) for projector at {}.", plan.getArtifactCount(), projectorPos);
+        VaultArtifactAutofillMod.LOGGER.info("Autofill queued {} artifact(s) for projector at {}. Auto-complete owner access: {}.", plan.getArtifactCount(), projectorPos, canAutoComplete);
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.SUCCESS);
     }
@@ -199,6 +195,23 @@ public final class ArtifactProjectorAutofillHandler {
         return origin.above(row).relative(rowDirection, column);
     }
 
+    private static BlockPos getSupportPos(BlockPos targetPos, Direction projectorFacing) {
+        return targetPos.relative(projectorFacing.getOpposite());
+    }
+
+    private static boolean hasPlacementSurface(Level level, BlockPos targetPos, Direction projectorFacing) {
+        BlockState supportState = level.getBlockState(getSupportPos(targetPos, projectorFacing));
+        return !supportState.isAir() && !supportState.getMaterial().isReplaceable();
+    }
+
+    private static Vec3 getPlacementClickLocation(BlockPos supportPos, Direction projectorFacing) {
+        return new Vec3(
+                supportPos.getX() + 0.5D + (projectorFacing.getStepX() * 0.5D),
+                supportPos.getY() + 0.5D + (projectorFacing.getStepY() * 0.5D),
+                supportPos.getZ() + 0.5D + (projectorFacing.getStepZ() * 0.5D)
+        );
+    }
+
     private static int toContainerSlot(int inventorySlot) {
         return inventorySlot < 9 ? 36 + inventorySlot : inventorySlot;
     }
@@ -220,8 +233,10 @@ public final class ArtifactProjectorAutofillHandler {
     private static final class PendingAutofill {
         private final BlockPos projectorPos;
         private final Direction hitFace;
+        private final Direction projectorFacing;
         private final int selectedHotbarSlot;
-        private final List<Integer> sourceInventorySlots;
+        private final List<PlacementStep> placementSteps;
+        private final boolean canAutoComplete;
 
         private int queueIndex;
         private int activeInventorySlot;
@@ -232,11 +247,13 @@ public final class ArtifactProjectorAutofillHandler {
         private int completionWaitTicks;
         private int consumeWaitTicks;
 
-        private PendingAutofill(BlockPos projectorPos, Direction hitFace, int selectedHotbarSlot, List<Integer> sourceInventorySlots) {
+        private PendingAutofill(BlockPos projectorPos, Direction hitFace, Direction projectorFacing, int selectedHotbarSlot, List<PlacementStep> placementSteps, boolean canAutoComplete) {
             this.projectorPos = projectorPos.immutable();
             this.hitFace = hitFace == null ? Direction.UP : hitFace;
+            this.projectorFacing = projectorFacing;
             this.selectedHotbarSlot = selectedHotbarSlot;
-            this.sourceInventorySlots = sourceInventorySlots;
+            this.placementSteps = placementSteps;
+            this.canAutoComplete = canAutoComplete;
             this.queueIndex = 0;
             this.activeInventorySlot = -1;
             this.directUse = false;
@@ -247,9 +264,10 @@ public final class ArtifactProjectorAutofillHandler {
             this.consumeWaitTicks = 0;
         }
 
-        private static PendingAutofill create(LocalPlayer player, BlockPos projectorPos, BlockState projectorState, Direction hitFace) {
-            List<Integer> queuedSlots = new ArrayList<>();
+        private static PendingAutofill create(LocalPlayer player, BlockPos projectorPos, BlockState projectorState, Direction hitFace, boolean canAutoComplete) {
+            List<PlacementStep> queuedSteps = new ArrayList<>();
             Set<Integer> plannedOrders = new HashSet<>();
+            Direction projectorFacing = projectorState.getValue(HorizontalDirectionalBlock.FACING);
 
             for (int inventorySlot : getScanOrder(player.getInventory().selected)) {
                 ItemStack stack = player.getInventory().getItem(inventorySlot);
@@ -264,18 +282,19 @@ public final class ArtifactProjectorAutofillHandler {
 
                 BlockPos targetPos = getTargetPos(projectorPos, projectorState, order);
                 BlockState targetState = player.level.getBlockState(targetPos);
-                if (isCorrectArtifact(targetState, order) || !canReplace(targetState)) {
+                if (isCorrectArtifact(targetState, order) || !canReplace(targetState) || !hasPlacementSurface(player.level, targetPos, projectorFacing)) {
                     continue;
                 }
 
-                queuedSlots.add(inventorySlot);
+                BlockPos supportPos = getSupportPos(targetPos, projectorFacing);
+                queuedSteps.add(new PlacementStep(inventorySlot, order, targetPos, supportPos, projectorFacing));
             }
 
-            if (queuedSlots.isEmpty()) {
+            if (queuedSteps.isEmpty()) {
                 return null;
             }
 
-            return new PendingAutofill(projectorPos, hitFace, player.getInventory().selected, queuedSlots);
+            return new PendingAutofill(projectorPos, hitFace, projectorFacing, player.getInventory().selected, queuedSteps, canAutoComplete);
         }
 
         private boolean isStillValid(Level level, LocalPlayer player) {
@@ -291,9 +310,12 @@ public final class ArtifactProjectorAutofillHandler {
                 return false;
             }
             if (this.stage == Stage.WAIT_FOR_CONSUME) {
-                return player.getUUID().equals(projector.getOwner());
+                return !this.canAutoComplete || player.getUUID().equals(projector.getOwner());
             }
-            return !projector.consuming && !projector.completed && player.getUUID().equals(projector.getOwner());
+            if (this.stage == Stage.CHECK_COMPLETE) {
+                return !projector.consuming && !projector.completed && (!this.canAutoComplete || player.getUUID().equals(projector.getOwner()));
+            }
+            return !projector.consuming && !projector.completed;
         }
 
         private void abort(Minecraft minecraft, LocalPlayer player) {
@@ -315,14 +337,31 @@ public final class ArtifactProjectorAutofillHandler {
                 return;
             }
 
-            if (this.queueIndex >= this.sourceInventorySlots.size()) {
-                this.stage = Stage.CHECK_COMPLETE;
-                tickCompletion(minecraft, player);
+            if (this.queueIndex >= this.placementSteps.size()) {
+                if (this.canAutoComplete) {
+                    this.stage = Stage.CHECK_COMPLETE;
+                    tickCompletion(minecraft, player);
+                } else {
+                    if (hasCompleteArtifactSet(player.level, this.projectorPos, player.level.getBlockState(this.projectorPos))) {
+                        showStatus(player, "Artifacts placed. Only the projector owner can complete it.");
+                        VaultArtifactAutofillMod.LOGGER.info("Autofill filled projector wall at {} but skipped completion because the player is not the owner.", this.projectorPos);
+                    }
+                    this.finished = true;
+                }
                 return;
             }
 
+            PlacementStep step = this.placementSteps.get(this.queueIndex);
+
             if (this.stage == Stage.PREPARE) {
-                this.activeInventorySlot = this.sourceInventorySlots.get(this.queueIndex);
+                if (isCorrectArtifact(player.level.getBlockState(step.targetPos()), step.order())
+                        || !canReplace(player.level.getBlockState(step.targetPos()))
+                        || !hasPlacementSurface(player.level, step.targetPos(), this.projectorFacing)) {
+                    advanceQueue();
+                    return;
+                }
+
+                this.activeInventorySlot = step.sourceInventorySlot();
                 this.directUse = this.activeInventorySlot == this.selectedHotbarSlot;
                 this.stage = this.directUse ? Stage.USE : Stage.SWAP_IN;
             }
@@ -349,7 +388,7 @@ public final class ArtifactProjectorAutofillHandler {
                             player,
                             (ClientLevel) player.level,
                             InteractionHand.MAIN_HAND,
-                            new BlockHitResult(Vec3.atCenterOf(this.projectorPos), this.hitFace, this.projectorPos, false)
+                            new BlockHitResult(getPlacementClickLocation(step.supportPos(), step.useFace()), step.useFace(), step.supportPos(), false)
                     );
                     if (this.directUse) {
                         advanceQueue();
@@ -430,8 +469,11 @@ public final class ArtifactProjectorAutofillHandler {
         }
 
         private int getArtifactCount() {
-            return this.sourceInventorySlots.size();
+            return this.placementSteps.size();
         }
+    }
+
+    private record PlacementStep(int sourceInventorySlot, int order, BlockPos targetPos, BlockPos supportPos, Direction useFace) {
     }
 
     private enum Stage {

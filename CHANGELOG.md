@@ -4,7 +4,9 @@ All notable changes to Vault Artifact Autofill are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Switched artifact placement to direct wall placement, so identified artifacts can be placed into any projector wall instead of only the owner's projector.
+- Kept full-inventory autofill support by swapping queued artifacts into the selected hotbar slot before each placement.
+- Limited the final completion click to the actual projector owner because Vault still server-gates projector completion.
 
 ## [1.0.5] - 2026-04-09
 
