@@ -10,7 +10,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.ClickType;
@@ -176,7 +176,7 @@ public final class ArtifactProjectorAutofillHandler {
     }
 
     private static void showStatus(LocalPlayer player, String message) {
-        player.displayClientMessage(Component.literal(message), true);
+        player.displayClientMessage(new TextComponent(message), true);
     }
 
     private static boolean hasCompleteArtifactSet(Level level, BlockPos projectorPos, BlockState projectorState) {
