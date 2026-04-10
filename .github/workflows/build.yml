@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6.4'
+
+      - name: Build with Gradle
+        run: gradle build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: vaultartifactautofill
+          path: build/libs/vaultartifactautofill-*.jar
+
+      - name: Read version from gradle.properties
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: version
+        run: |
+          VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update latest dev build release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Dev Build (v${{ steps.version.outputs.version }} @ ${{ steps.version.outputs.short_sha }})"
+          body: |
+            **Automatic dev build** from the latest `main` commit.
+
+            Version: `${{ steps.version.outputs.version }}`
+            Commit: `${{ github.sha }}`
+          files: build/libs/vaultartifactautofill-*.jar
+          prerelease: true
+          make_latest: false
