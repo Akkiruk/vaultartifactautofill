@@ -16,10 +16,10 @@ def trackedFiles = files(
     fileTree(dir: 'scripts', includes: ['*.ps1']),
     file('build.gradle'),
     file('settings.gradle'),
-    file('gradle.properties'),
-    file('README.md'),
-    file('CHANGELOG.md')
+    file('gradle.properties')
 ).files.findAll { it.exists() }.sort { a, b -> a.path <=> b.path }
+
+def isCiBuild = System.getenv('CI') != null || System.getenv('GITHUB_ACTIONS') != null
 
 def normalizeTrackedFile = { File tracked ->
     String text = tracked.getText('UTF-8')
@@ -70,7 +70,7 @@ def resolvedModGroup = gradleProps.getProperty('mod_group')
 def resolvedModId = gradleProps.getProperty('mod_id')
 def resolvedSourceHash = computeTrackedSourceHash()
 
-if (persistedSourceHash != resolvedSourceHash) {
+if (persistedSourceHash != resolvedSourceHash && !isCiBuild) {
     resolvedModVersion = bumpPatchVersion(resolvedModVersion)
 
     String propsText = gradlePropsFile.getText('UTF-8')
@@ -82,6 +82,8 @@ if (persistedSourceHash != resolvedSourceHash) {
     gradleProps.setProperty('mod_source_hash', resolvedSourceHash)
 
     logger.lifecycle("Auto-bumped vaultartifactautofill version to ${resolvedModVersion} (source hash ${resolvedSourceHash})")
+} else if (persistedSourceHash != resolvedSourceHash && isCiBuild) {
+    logger.lifecycle("CI build detected source hash drift (${persistedSourceHash} -> ${resolvedSourceHash}); keeping committed mod_version ${resolvedModVersion} without mutating gradle.properties")
 }
 
 version = resolvedModVersion

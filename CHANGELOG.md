@@ -4,7 +4,9 @@ All notable changes to Vault Artifact Autofill are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+- Fixed GitHub release builds so CI no longer auto-bumps the mod version during tagged builds.
+- Removed release-managed docs from the auto-version hash to keep tag builds aligned with committed versions.
+- Added an explicit tag-versus-mod-version check in the release workflow for clearer future failures.
 
 ## [1.0.6] - 2026-04-09
 
