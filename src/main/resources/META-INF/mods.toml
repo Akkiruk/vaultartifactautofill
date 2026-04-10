@@ -1,0 +1,34 @@
+modLoader="javafml"
+loaderVersion="[40,)"
+license="MIT"
+displayTest="IGNORE_SERVER_VERSION"
+
+[[mods]]
+  modId="vaultartifactautofill"
+  version="${file.jarVersion}"
+  displayName="Vault Artifact Autofill"
+  description='''
+Client-side autofill for Vault Hunters artifact projectors.
+Right-click your own incomplete projector to batch-place matching artifacts from your inventory using normal vanilla interactions.
+'''
+
+[[dependencies.vaultartifactautofill]]
+  modId="forge"
+  mandatory=true
+  versionRange="[40,)"
+  ordering="NONE"
+  side="BOTH"
+
+[[dependencies.vaultartifactautofill]]
+  modId="minecraft"
+  mandatory=true
+  versionRange="[1.18.2,1.19)"
+  ordering="NONE"
+  side="BOTH"
+
+[[dependencies.vaultartifactautofill]]
+  modId="the_vault"
+  mandatory=true
+  versionRange="[0,)"
+  ordering="AFTER"
+  side="BOTH"

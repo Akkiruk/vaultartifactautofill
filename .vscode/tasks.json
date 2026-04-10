@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build JAR",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": [
+        "build"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build + Deploy JAR",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build-and-deploy-vaultartifactautofill.ps1"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "Release New Version",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/release.ps1"
+      ],
+      "group": "none"
+    },
+    {
+      "label": "Release (Dry Run)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/release.ps1",
+        "-DryRun"
+      ],
+      "group": "none"
+    }
+  ]
+}
